@@ -1,6 +1,10 @@
 import logo from './logo.svg';
 import './App.css';
 import * as d3 from "d3";
+import {Eyes} from "./smiley/Eye";
+import {Mouth} from "./smiley/Mouth";
+import {Background} from "./smiley/Background";
+import {Face} from "./smiley/Face";
 
 const width = 500;
 const height = 500;
@@ -14,25 +18,28 @@ const eyeOffsetY = 50;
 const mouthWidth = 20;
 const mouthRadius = 140;
 
-const mouthArc = d3.arc()
-    .innerRadius(mouthRadius)
-    .outerRadius(mouthRadius + mouthWidth)
-    .startAngle(Math.PI* 2.5 / 4)
-    .endAngle(Math.PI * 5.5 / 4);
+const arr = [1, 2, 3];
 
 function App() {
     return (
         <div className="App">
-            <svg width={width} height={height}>
-                <g transform={`translate(${centerX},${centerY})`}>
-                    <circle cx={0} r={centerY - strokeWidth} stroke={'black'}
-                            strokeWidth={strokeWidth}
-                            fill={'yellow'}/>
-                    <circle cx={-eyeOffsetX} cy={-eyeOffsetY} r={eyeRadius}/>
-                    <circle cx={eyeOffsetX} cy={-eyeOffsetY} r={eyeRadius}/>
-                    <path d={mouthArc()}/>
-                </g>
-            </svg>
+            {
+                arr.map(() => (
+                    <Face
+
+                              width={width}
+                              height={height}
+                              centerX={centerX}
+                              centerY={centerY}
+                          >
+
+                                <Background strokeWidth={strokeWidth} centerY={centerY}/>
+                                <Eyes eyeOffsetX={eyeOffsetX} eyeOffsetY={eyeOffsetY} eyeRadius={eyeRadius* Math.random()}/>
+                                <Mouth mouthRadius={mouthRadius} mouthWidth={mouthWidth * Math.random()}/>
+
+                    </Face>
+                ))
+            }
         </div>
     );
 }
