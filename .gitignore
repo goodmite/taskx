@@ -7,6 +7,8 @@
 
 # testing
 /coverage
+/ALL_BRANCH_BUILD
+_template.js
 
 # production
 /build
@@ -23,3 +25,4 @@ x.js
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
