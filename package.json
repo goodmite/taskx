@@ -9,6 +9,7 @@
     "@testing-library/react": "^11.1.0",
     "@testing-library/user-event": "^12.1.10",
     "d3": "^6.6.1",
+    "deploy-all": "0.0.3",
     "fs-extra": "^9.1.0",
     "nodegit": "^0.27.0",
     "react": "^17.0.2",
