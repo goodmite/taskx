@@ -1,0 +1,23 @@
+{
+  "files": {
+    "main.css": "/smiley-face/static/css/main.05e79e7c.chunk.css",
+    "main.js": "/smiley-face/static/js/main.89842b46.chunk.js",
+    "main.js.map": "/smiley-face/static/js/main.89842b46.chunk.js.map",
+    "runtime-main.js": "/smiley-face/static/js/runtime-main.5b1d2204.js",
+    "runtime-main.js.map": "/smiley-face/static/js/runtime-main.5b1d2204.js.map",
+    "static/js/2.d17d7192.chunk.js": "/smiley-face/static/js/2.d17d7192.chunk.js",
+    "static/js/2.d17d7192.chunk.js.map": "/smiley-face/static/js/2.d17d7192.chunk.js.map",
+    "static/js/3.43e80a10.chunk.js": "/smiley-face/static/js/3.43e80a10.chunk.js",
+    "static/js/3.43e80a10.chunk.js.map": "/smiley-face/static/js/3.43e80a10.chunk.js.map",
+    "index.html": "/smiley-face/index.html",
+    "static/css/main.05e79e7c.chunk.css.map": "/smiley-face/static/css/main.05e79e7c.chunk.css.map",
+    "static/js/2.d17d7192.chunk.js.LICENSE.txt": "/smiley-face/static/js/2.d17d7192.chunk.js.LICENSE.txt",
+    "static/media/logo.6ce24c58.svg": "/smiley-face/static/media/logo.6ce24c58.svg"
+  },
+  "entrypoints": [
+    "static/js/runtime-main.5b1d2204.js",
+    "static/js/2.d17d7192.chunk.js",
+    "static/css/main.05e79e7c.chunk.css",
+    "static/js/main.89842b46.chunk.js"
+  ]
+}
