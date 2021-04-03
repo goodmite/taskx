@@ -4,11 +4,6 @@ var app = (function () {
     'use strict';
 
     function noop() { }
-    function add_location(element, file, line, column, char) {
-        element.__svelte_meta = {
-            loc: { file, line, column, char }
-        };
-    }
     function run(fn) {
         return fn();
     }
@@ -23,6 +18,9 @@ var app = (function () {
     }
     function safe_not_equal(a, b) {
         return a != a ? b == b : a !== b || ((a && typeof a === 'object') || typeof a === 'function');
+    }
+    function is_empty(obj) {
+        return Object.keys(obj).length === 0;
     }
 
     function append(target, node) {
@@ -61,13 +59,13 @@ var app = (function () {
     function children(element) {
         return Array.from(element.childNodes);
     }
+    function set_data(text, data) {
+        data = '' + data;
+        if (text.wholeText !== data)
+            text.data = data;
+    }
     function set_style(node, key, value, important) {
         node.style.setProperty(key, value, important ? 'important' : '');
-    }
-    function custom_event(type, detail) {
-        const e = document.createEvent('CustomEvent');
-        e.initCustomEvent(type, false, false, detail);
-        return e;
     }
 
     let current_component;
@@ -90,16 +88,22 @@ var app = (function () {
     function add_render_callback(fn) {
         render_callbacks.push(fn);
     }
+    let flushing = false;
+    const seen_callbacks = new Set();
     function flush() {
-        const seen_callbacks = new Set();
+        if (flushing)
+            return;
+        flushing = true;
         do {
             // first, call beforeUpdate functions
             // and update components
-            while (dirty_components.length) {
-                const component = dirty_components.shift();
+            for (let i = 0; i < dirty_components.length; i += 1) {
+                const component = dirty_components[i];
                 set_current_component(component);
                 update(component.$$);
             }
+            set_current_component(null);
+            dirty_components.length = 0;
             while (binding_callbacks.length)
                 binding_callbacks.pop()();
             // then, once components are updated, call
@@ -108,9 +112,9 @@ var app = (function () {
             for (let i = 0; i < render_callbacks.length; i += 1) {
                 const callback = render_callbacks[i];
                 if (!seen_callbacks.has(callback)) {
-                    callback();
                     // ...so guard against infinite loops
                     seen_callbacks.add(callback);
+                    callback();
                 }
             }
             render_callbacks.length = 0;
@@ -119,6 +123,8 @@ var app = (function () {
             flush_callbacks.pop()();
         }
         update_scheduled = false;
+        flushing = false;
+        seen_callbacks.clear();
     }
     function update($$) {
         if ($$.fragment !== null) {
@@ -217,22 +223,24 @@ var app = (function () {
             insert(new_blocks[n - 1]);
         return new_blocks;
     }
-    function mount_component(component, target, anchor) {
+    function mount_component(component, target, anchor, customElement) {
         const { fragment, on_mount, on_destroy, after_update } = component.$$;
         fragment && fragment.m(target, anchor);
-        // onMount happens before the initial afterUpdate
-        add_render_callback(() => {
-            const new_on_destroy = on_mount.map(run).filter(is_function);
-            if (on_destroy) {
-                on_destroy.push(...new_on_destroy);
-            }
-            else {
-                // Edge case - component was destroyed immediately,
-                // most likely as a result of a binding initialising
-                run_all(new_on_destroy);
-            }
-            component.$$.on_mount = [];
-        });
+        if (!customElement) {
+            // onMount happens before the initial afterUpdate
+            add_render_callback(() => {
+                const new_on_destroy = on_mount.map(run).filter(is_function);
+                if (on_destroy) {
+                    on_destroy.push(...new_on_destroy);
+                }
+                else {
+                    // Edge case - component was destroyed immediately,
+                    // most likely as a result of a binding initialising
+                    run_all(new_on_destroy);
+                }
+                component.$$.on_mount = [];
+            });
+        }
         after_update.forEach(add_render_callback);
     }
     function destroy_component(component, detaching) {
@@ -257,7 +265,6 @@ var app = (function () {
     function init(component, options, instance, create_fragment, not_equal, props, dirty = [-1]) {
         const parent_component = current_component;
         set_current_component(component);
-        const prop_values = options.props || {};
         const $$ = component.$$ = {
             fragment: null,
             ctx: null,
@@ -269,18 +276,21 @@ var app = (function () {
             // lifecycle
             on_mount: [],
             on_destroy: [],
+            on_disconnect: [],
             before_update: [],
             after_update: [],
-            context: new Map(parent_component ? parent_component.$$.context : []),
+            context: new Map(parent_component ? parent_component.$$.context : options.context || []),
             // everything else
             callbacks: blank_object(),
-            dirty
+            dirty,
+            skip_bound: false
         };
         let ready = false;
         $$.ctx = instance
-            ? instance(component, prop_values, (i, ret, value = ret) => {
+            ? instance(component, options.props || {}, (i, ret, ...rest) => {
+                const value = rest.length ? rest[0] : ret;
                 if ($$.ctx && not_equal($$.ctx[i], $$.ctx[i] = value)) {
-                    if ($$.bound[i])
+                    if (!$$.skip_bound && $$.bound[i])
                         $$.bound[i](value);
                     if (ready)
                         make_dirty(component, i);
@@ -295,8 +305,10 @@ var app = (function () {
         $$.fragment = create_fragment ? create_fragment($$.ctx) : false;
         if (options.target) {
             if (options.hydrate) {
+                const nodes = children(options.target);
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                $$.fragment && $$.fragment.l(children(options.target));
+                $$.fragment && $$.fragment.l(nodes);
+                nodes.forEach(detach);
             }
             else {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -304,11 +316,14 @@ var app = (function () {
             }
             if (options.intro)
                 transition_in(component.$$.fragment);
-            mount_component(component, options.target, options.anchor);
+            mount_component(component, options.target, options.anchor, options.customElement);
             flush();
         }
         set_current_component(parent_component);
     }
+    /**
+     * Base class for Svelte components. Used when dev=false.
+     */
     class SvelteComponent {
         $destroy() {
             destroy_component(this, 1);
@@ -323,52 +338,12 @@ var app = (function () {
                     callbacks.splice(index, 1);
             };
         }
-        $set() {
-            // overridden by instance, if it has props
-        }
-    }
-
-    function dispatch_dev(type, detail) {
-        document.dispatchEvent(custom_event(type, detail));
-    }
-    function append_dev(target, node) {
-        dispatch_dev("SvelteDOMInsert", { target, node });
-        append(target, node);
-    }
-    function insert_dev(target, node, anchor) {
-        dispatch_dev("SvelteDOMInsert", { target, node, anchor });
-        insert(target, node, anchor);
-    }
-    function detach_dev(node) {
-        dispatch_dev("SvelteDOMRemove", { node });
-        detach(node);
-    }
-    function attr_dev(node, attribute, value) {
-        attr(node, attribute, value);
-        if (value == null)
-            dispatch_dev("SvelteDOMRemoveAttribute", { node, attribute });
-        else
-            dispatch_dev("SvelteDOMSetAttribute", { node, attribute, value });
-    }
-    function set_data_dev(text, data) {
-        data = '' + data;
-        if (text.data === data)
-            return;
-        dispatch_dev("SvelteDOMSetData", { node: text, data });
-        text.data = data;
-    }
-    class SvelteComponentDev extends SvelteComponent {
-        constructor(options) {
-            if (!options || (!options.target && !options.$$inline)) {
-                throw new Error(`'target' is a required option`);
+        $set($$props) {
+            if (this.$$set && !is_empty($$props)) {
+                this.$$.skip_bound = true;
+                this.$$set($$props);
+                this.$$.skip_bound = false;
             }
-            super();
-        }
-        $destroy() {
-            super.$destroy();
-            this.$destroy = () => {
-                console.warn(`Component was already destroyed`); // eslint-disable-line no-console
-            };
         }
     }
 
@@ -4091,48 +4066,35 @@ var app = (function () {
       return linearish(scale);
     }
 
-    /* src\App.svelte generated by Svelte v3.16.7 */
-    const file = "src\\App.svelte";
+    /* src\App.svelte generated by Svelte v3.37.0 */
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[9] = list[i];
+    	child_ctx[14] = list[i];
     	return child_ctx;
     }
 
     function get_each_context_1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[12] = list[i];
+    	child_ctx[17] = list[i];
     	return child_ctx;
     }
 
-    function get_each_context_2(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[12] = list[i];
-    	return child_ctx;
-    }
-
-    // (52:0) {#if data}
+    // (66:0) {#if data}
     function create_if_block(ctx) {
     	let div;
     	let svg;
     	let g;
-    	let each0_anchor;
     	let text_1;
-    	let t;
+    	let t0;
+    	let t1;
+    	let t2;
     	let text_1_x_value;
     	let text_1_y_value;
     	let text_1_textanchor_value;
     	let each_blocks = [];
-    	let each2_lookup = new Map();
+    	let each1_lookup = new Map();
     	let g_transform_value;
-    	let each_value_2 = /*xScale*/ ctx[5].ticks();
-    	let each_blocks_2 = [];
-
-    	for (let i = 0; i < each_value_2.length; i += 1) {
-    		each_blocks_2[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
-    	}
-
     	let each_value_1 = /*yScale*/ ctx[4].domain();
     	let each_blocks_1 = [];
 
@@ -4141,96 +4103,61 @@ var app = (function () {
     	}
 
     	let each_value = /*data*/ ctx[0];
-    	const get_key = ctx => /*d*/ ctx[9].Country;
+    	const get_key = ctx => /*d*/ ctx[14].Country;
 
     	for (let i = 0; i < each_value.length; i += 1) {
     		let child_ctx = get_each_context(ctx, each_value, i);
     		let key = get_key(child_ctx);
-    		each2_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
+    		each1_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
     	}
 
-    	const block = {
-    		c: function create() {
+    	return {
+    		c() {
     			div = element("div");
     			svg = svg_element("svg");
     			g = svg_element("g");
-
-    			for (let i = 0; i < each_blocks_2.length; i += 1) {
-    				each_blocks_2[i].c();
-    			}
-
-    			each0_anchor = empty();
 
     			for (let i = 0; i < each_blocks_1.length; i += 1) {
     				each_blocks_1[i].c();
     			}
 
     			text_1 = svg_element("text");
-    			t = text("Population\r\n        ");
+    			t0 = text("Population (");
+    			t1 = text(/*year*/ ctx[6]);
+    			t2 = text(")\r\n                ");
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
 
-    			attr_dev(text_1, "class", "axis-label");
-    			attr_dev(text_1, "x", text_1_x_value = /*innerWidth*/ ctx[2] / 2);
-    			attr_dev(text_1, "y", text_1_y_value = /*innerHeight*/ ctx[1] + /*axisLabelOffset*/ ctx[3]);
-    			attr_dev(text_1, "textanchor", text_1_textanchor_value = "middle");
-    			add_location(text_1, file, 71, 8, 2170);
-    			attr_dev(g, "transform", g_transform_value = `translate(${/*margin*/ ctx[6].left}, ${/*margin*/ ctx[6].right})`);
-    			add_location(g, file, 54, 6, 1442);
-    			attr_dev(svg, "width", width);
-    			attr_dev(svg, "height", height);
-    			add_location(svg, file, 53, 4, 1399);
-    			attr_dev(div, "class", "wrapper");
-    			add_location(div, file, 52, 2, 1372);
+    			attr(text_1, "class", "axis-label");
+    			attr(text_1, "x", text_1_x_value = /*innerWidth*/ ctx[2] / 2);
+    			attr(text_1, "y", text_1_y_value = /*innerHeight*/ ctx[1] + /*axisLabelOffset*/ ctx[3]);
+    			attr(text_1, "textanchor", text_1_textanchor_value = "middle");
+    			attr(g, "transform", g_transform_value = `translate(${/*margin*/ ctx[9].left}, ${/*margin*/ ctx[9].right})`);
+    			attr(svg, "width", /*width*/ ctx[7]);
+    			attr(svg, "height", /*height*/ ctx[8]);
+    			attr(div, "class", "wrapper");
     		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			append_dev(div, svg);
-    			append_dev(svg, g);
-
-    			for (let i = 0; i < each_blocks_2.length; i += 1) {
-    				each_blocks_2[i].m(g, null);
-    			}
-
-    			append_dev(g, each0_anchor);
+    		m(target, anchor) {
+    			insert(target, div, anchor);
+    			append(div, svg);
+    			append(svg, g);
 
     			for (let i = 0; i < each_blocks_1.length; i += 1) {
     				each_blocks_1[i].m(g, null);
     			}
 
-    			append_dev(g, text_1);
-    			append_dev(text_1, t);
+    			append(g, text_1);
+    			append(text_1, t0);
+    			append(text_1, t1);
+    			append(text_1, t2);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].m(g, null);
     			}
     		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*xScale, innerHeight, d3*/ 34) {
-    				each_value_2 = /*xScale*/ ctx[5].ticks();
-    				let i;
-
-    				for (i = 0; i < each_value_2.length; i += 1) {
-    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
-
-    					if (each_blocks_2[i]) {
-    						each_blocks_2[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks_2[i] = create_each_block_2(child_ctx);
-    						each_blocks_2[i].c();
-    						each_blocks_2[i].m(g, each0_anchor);
-    					}
-    				}
-
-    				for (; i < each_blocks_2.length; i += 1) {
-    					each_blocks_2[i].d(1);
-    				}
-
-    				each_blocks_2.length = each_value_2.length;
-    			}
-
+    		p(ctx, dirty) {
     			if (dirty & /*yScale*/ 16) {
     				each_value_1 = /*yScale*/ ctx[4].domain();
     				let i;
@@ -4254,20 +4181,23 @@ var app = (function () {
     				each_blocks_1.length = each_value_1.length;
     			}
 
+    			if (dirty & /*year*/ 64) set_data(t1, /*year*/ ctx[6]);
+
     			if (dirty & /*innerWidth*/ 4 && text_1_x_value !== (text_1_x_value = /*innerWidth*/ ctx[2] / 2)) {
-    				attr_dev(text_1, "x", text_1_x_value);
+    				attr(text_1, "x", text_1_x_value);
     			}
 
     			if (dirty & /*innerHeight, axisLabelOffset*/ 10 && text_1_y_value !== (text_1_y_value = /*innerHeight*/ ctx[1] + /*axisLabelOffset*/ ctx[3])) {
-    				attr_dev(text_1, "y", text_1_y_value);
+    				attr(text_1, "y", text_1_y_value);
     			}
 
-    			const each_value = /*data*/ ctx[0];
-    			each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each2_lookup, g, destroy_block, create_each_block, null, get_each_context);
+    			if (dirty & /*yScale, data, xScale, d3*/ 49) {
+    				each_value = /*data*/ ctx[0];
+    				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each1_lookup, g, destroy_block, create_each_block, null, get_each_context);
+    			}
     		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    			destroy_each(each_blocks_2, detaching);
+    		d(detaching) {
+    			if (detaching) detach(div);
     			destroy_each(each_blocks_1, detaching);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
@@ -4275,216 +4205,112 @@ var app = (function () {
     			}
     		}
     	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block.name,
-    		type: "if",
-    		source: "(52:0) {#if data}",
-    		ctx
-    	});
-
-    	return block;
     }
 
-    // (57:8) {#each xScale.ticks() as tickValue}
-    function create_each_block_2(ctx) {
-    	let g;
-    	let line;
-    	let line_stroke_value;
-    	let text_1;
-    	let t_value = format(".2s")(/*tickValue*/ ctx[12]).replace("G", "B") + "";
-    	let t;
-    	let text_1_style_value;
-    	let text_1_y_value;
-    	let g_class_value;
-    	let g_transform_value;
-
-    	const block = {
-    		c: function create() {
-    			g = svg_element("g");
-    			line = svg_element("line");
-    			text_1 = svg_element("text");
-    			t = text(t_value);
-    			attr_dev(line, "y2", /*innerHeight*/ ctx[1]);
-    			attr_dev(line, "stroke", line_stroke_value = "black");
-    			add_location(line, file, 58, 12, 1645);
-    			attr_dev(text_1, "style", text_1_style_value = { "textAnchor": "middle" });
-    			attr_dev(text_1, "y", text_1_y_value = /*innerHeight*/ ctx[1] + 5);
-    			attr_dev(text_1, "dy", ".71em");
-    			add_location(text_1, file, 59, 12, 1700);
-    			attr_dev(g, "class", g_class_value = "tick");
-    			attr_dev(g, "transform", g_transform_value = `translate(${/*xScale*/ ctx[5](/*tickValue*/ ctx[12])}, ${0})`);
-    			add_location(g, file, 57, 10, 1561);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g, anchor);
-    			append_dev(g, line);
-    			append_dev(g, text_1);
-    			append_dev(text_1, t);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*innerHeight*/ 2) {
-    				attr_dev(line, "y2", /*innerHeight*/ ctx[1]);
-    			}
-
-    			if (dirty & /*xScale*/ 32 && t_value !== (t_value = format(".2s")(/*tickValue*/ ctx[12]).replace("G", "B") + "")) set_data_dev(t, t_value);
-
-    			if (dirty & /*innerHeight*/ 2 && text_1_y_value !== (text_1_y_value = /*innerHeight*/ ctx[1] + 5)) {
-    				attr_dev(text_1, "y", text_1_y_value);
-    			}
-
-    			if (dirty & /*xScale*/ 32 && g_transform_value !== (g_transform_value = `translate(${/*xScale*/ ctx[5](/*tickValue*/ ctx[12])}, ${0})`)) {
-    				attr_dev(g, "transform", g_transform_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_2.name,
-    		type: "each",
-    		source: "(57:8) {#each xScale.ticks() as tickValue}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (66:8) {#each yScale.domain() as tickValue}
+    // (71:16) {#each yScale.domain() as tickValue}
     function create_each_block_1(ctx) {
     	let g;
     	let text_1;
-    	let t_value = /*tickValue*/ ctx[12] + "";
+    	let t_value = /*tickValue*/ ctx[17] + "";
     	let t;
     	let text_1_x_value;
     	let text_1_dy_value;
     	let g_class_value;
     	let g_transform_value;
 
-    	const block = {
-    		c: function create() {
+    	return {
+    		c() {
     			g = svg_element("g");
     			text_1 = svg_element("text");
     			t = text(t_value);
     			set_style(text_1, "text-anchor", "end");
-    			attr_dev(text_1, "x", text_1_x_value = -3);
-    			attr_dev(text_1, "dy", text_1_dy_value = ".32em");
-    			add_location(text_1, file, 67, 12, 2054);
-    			attr_dev(g, "class", g_class_value = "tick");
-    			attr_dev(g, "transform", g_transform_value = `translate(${0}, ${/*yScale*/ ctx[4](/*tickValue*/ ctx[12]) + /*yScale*/ ctx[4].bandwidth() / 2})`);
-    			add_location(g, file, 66, 10, 1947);
+    			attr(text_1, "x", text_1_x_value = -3);
+    			attr(text_1, "dy", text_1_dy_value = ".32em");
+    			attr(g, "class", g_class_value = "tick");
+    			attr(g, "transform", g_transform_value = `translate(${0}, ${/*yScale*/ ctx[4](/*tickValue*/ ctx[17]) + /*yScale*/ ctx[4].bandwidth() / 2})`);
     		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, g, anchor);
-    			append_dev(g, text_1);
-    			append_dev(text_1, t);
+    		m(target, anchor) {
+    			insert(target, g, anchor);
+    			append(g, text_1);
+    			append(text_1, t);
     		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*yScale*/ 16 && t_value !== (t_value = /*tickValue*/ ctx[12] + "")) set_data_dev(t, t_value);
+    		p(ctx, dirty) {
+    			if (dirty & /*yScale*/ 16 && t_value !== (t_value = /*tickValue*/ ctx[17] + "")) set_data(t, t_value);
 
-    			if (dirty & /*yScale*/ 16 && g_transform_value !== (g_transform_value = `translate(${0}, ${/*yScale*/ ctx[4](/*tickValue*/ ctx[12]) + /*yScale*/ ctx[4].bandwidth() / 2})`)) {
-    				attr_dev(g, "transform", g_transform_value);
+    			if (dirty & /*yScale*/ 16 && g_transform_value !== (g_transform_value = `translate(${0}, ${/*yScale*/ ctx[4](/*tickValue*/ ctx[17]) + /*yScale*/ ctx[4].bandwidth() / 2})`)) {
+    				attr(g, "transform", g_transform_value);
     			}
     		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(g);
+    		d(detaching) {
+    			if (detaching) detach(g);
     		}
     	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block_1.name,
-    		type: "each",
-    		source: "(66:8) {#each yScale.domain() as tickValue}",
-    		ctx
-    	});
-
-    	return block;
     }
 
-    // (76:8) {#each data as d(d.Country)}
+    // (81:16) {#each data as d(d.Country)}
     function create_each_block(key_1, ctx) {
     	let rect;
     	let title;
-    	let t_value = format(".2s")(/*d*/ ctx[9].population).replace("G", "B") + "";
+    	let t_value = format(".2s")(/*d*/ ctx[14].population).replace("G", "B") + "";
     	let t;
-    	let rect_class_value;
     	let rect_y_value;
     	let rect_width_value;
     	let rect_height_value;
 
-    	const block = {
+    	return {
     		key: key_1,
     		first: null,
-    		c: function create() {
+    		c() {
     			rect = svg_element("rect");
     			title = svg_element("title");
     			t = text(t_value);
-    			add_location(title, file, 82, 12, 2561);
-    			attr_dev(rect, "class", rect_class_value = "mark");
-    			attr_dev(rect, "y", rect_y_value = /*yScale*/ ctx[4](/*d*/ ctx[9].Country));
-    			attr_dev(rect, "width", rect_width_value = /*xScale*/ ctx[5](/*d*/ ctx[9].population));
-    			attr_dev(rect, "height", rect_height_value = /*yScale*/ ctx[4].bandwidth());
-    			add_location(rect, file, 76, 10, 2359);
+    			attr(rect, "class", "mark");
+    			attr(rect, "y", rect_y_value = /*yScale*/ ctx[4](/*d*/ ctx[14].Country));
+    			attr(rect, "width", rect_width_value = /*xScale*/ ctx[5](/*d*/ ctx[14].population));
+    			attr(rect, "height", rect_height_value = /*yScale*/ ctx[4].bandwidth());
     			this.first = rect;
     		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, rect, anchor);
-    			append_dev(rect, title);
-    			append_dev(title, t);
+    		m(target, anchor) {
+    			insert(target, rect, anchor);
+    			append(rect, title);
+    			append(title, t);
     		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*data*/ 1 && t_value !== (t_value = format(".2s")(/*d*/ ctx[9].population).replace("G", "B") + "")) set_data_dev(t, t_value);
+    		p(new_ctx, dirty) {
+    			ctx = new_ctx;
+    			if (dirty & /*data*/ 1 && t_value !== (t_value = format(".2s")(/*d*/ ctx[14].population).replace("G", "B") + "")) set_data(t, t_value);
 
-    			if (dirty & /*yScale, data*/ 17 && rect_y_value !== (rect_y_value = /*yScale*/ ctx[4](/*d*/ ctx[9].Country))) {
-    				attr_dev(rect, "y", rect_y_value);
+    			if (dirty & /*yScale, data*/ 17 && rect_y_value !== (rect_y_value = /*yScale*/ ctx[4](/*d*/ ctx[14].Country))) {
+    				attr(rect, "y", rect_y_value);
     			}
 
-    			if (dirty & /*xScale, data*/ 33 && rect_width_value !== (rect_width_value = /*xScale*/ ctx[5](/*d*/ ctx[9].population))) {
-    				attr_dev(rect, "width", rect_width_value);
+    			if (dirty & /*xScale, data*/ 33 && rect_width_value !== (rect_width_value = /*xScale*/ ctx[5](/*d*/ ctx[14].population))) {
+    				attr(rect, "width", rect_width_value);
     			}
 
     			if (dirty & /*yScale*/ 16 && rect_height_value !== (rect_height_value = /*yScale*/ ctx[4].bandwidth())) {
-    				attr_dev(rect, "height", rect_height_value);
+    				attr(rect, "height", rect_height_value);
     			}
     		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(rect);
+    		d(detaching) {
+    			if (detaching) detach(rect);
     		}
     	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_each_block.name,
-    		type: "each",
-    		source: "(76:8) {#each data as d(d.Country)}",
-    		ctx
-    	});
-
-    	return block;
     }
 
     function create_fragment(ctx) {
     	let if_block_anchor;
     	let if_block = /*data*/ ctx[0] && create_if_block(ctx);
 
-    	const block = {
-    		c: function create() {
+    	return {
+    		c() {
     			if (if_block) if_block.c();
     			if_block_anchor = empty();
     		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
+    		m(target, anchor) {
     			if (if_block) if_block.m(target, anchor);
-    			insert_dev(target, if_block_anchor, anchor);
+    			insert(target, if_block_anchor, anchor);
     		},
-    		p: function update(ctx, [dirty]) {
+    		p(ctx, [dirty]) {
     			if (/*data*/ ctx[0]) {
     				if (if_block) {
     					if_block.p(ctx, dirty);
@@ -4500,28 +4326,27 @@ var app = (function () {
     		},
     		i: noop,
     		o: noop,
-    		d: function destroy(detaching) {
+    		d(detaching) {
     			if (if_block) if_block.d(detaching);
-    			if (detaching) detach_dev(if_block_anchor);
+    			if (detaching) detach(if_block_anchor);
     		}
     	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
     }
 
     const url = "https://gist.githubusercontent.com/curran/0ac4077c7fc6390f5dd33bf5c06cb5ff/raw/605c54080c7a93a417a3cea93fd52e7550e76500/UN_Population_2019.csv";
-    const height = 500;
-    const width = 800;
 
     function instance($$self, $$props, $$invalidate) {
+    	let width = 800,
+    		innerHeight,
+    		innerWidth,
+    		axisLabelOffset,
+    		yScale,
+    		maxPop,
+    		xScale,
+    		height = 500,
+    		data = [],
+    		year = 1950;
+
     	const margin = {
     		top: 20,
     		bottom: 60,
@@ -4529,67 +4354,62 @@ var app = (function () {
     		right: 10
     	};
 
-    	let data = [];
-
-    	const row = d => {
-    		d.population = +d["2020"] * 1000;
-    		return d;
+    	const addPopulation = (data, year) => {
+    		return data.map(d => ({ ...d, population: +d[year] * 1000 })).slice(0, 10);
     	};
 
-    	csv$1(url, row).then(dataArg => {
-    		$$invalidate(0, data = dataArg.slice(0, 10));
+    	csv$1(url).then(dataArg => {
+    		const interval = setInterval(
+    			() => {
+    				$$invalidate(0, data = addPopulation(dataArg, year));
+
+    				if (year === 2020) {
+    					$$invalidate(6, year = 1950);
+    				} else {
+    					$$invalidate(6, year++, year);
+    				}
+    			},
+    			100
+    		);
     	});
 
-    	let innerHeight;
-    	let innerWidth;
-    	let axisLabelOffset;
-    	let yScale;
-    	let maxPop;
-    	let xScale;
-
-    	$$self.$capture_state = () => {
-    		return {};
-    	};
-
-    	$$self.$inject_state = $$props => {
-    		if ("data" in $$props) $$invalidate(0, data = $$props.data);
-    		if ("innerHeight" in $$props) $$invalidate(1, innerHeight = $$props.innerHeight);
-    		if ("innerWidth" in $$props) $$invalidate(2, innerWidth = $$props.innerWidth);
-    		if ("axisLabelOffset" in $$props) $$invalidate(3, axisLabelOffset = $$props.axisLabelOffset);
-    		if ("yScale" in $$props) $$invalidate(4, yScale = $$props.yScale);
-    		if ("maxPop" in $$props) $$invalidate(7, maxPop = $$props.maxPop);
-    		if ("xScale" in $$props) $$invalidate(5, xScale = $$props.xScale);
+    	const updateGraph = () => {
+    		$$invalidate(1, innerHeight = height - margin.top - margin.bottom);
+    		$$invalidate(2, innerWidth = width - margin.left - margin.right);
+    		$$invalidate(3, axisLabelOffset = 60);
+    		$$invalidate(4, yScale = band().domain(data.map(d => d.Country)).range([0, innerHeight]).paddingInner(0.1));
+    		maxPop = max(data, d => d.population);
+    		$$invalidate(5, xScale = linear$1().domain([0, maxPop]).range([0, innerWidth]));
     	};
 
     	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*data, innerHeight, maxPop, innerWidth*/ 135) {
+    		if ($$self.$$.dirty & /*data*/ 1) {
     			 {
     				if (data) {
-    					$$invalidate(1, innerHeight = height - margin.top - margin.bottom);
-    					$$invalidate(2, innerWidth = width - margin.left - margin.right);
-    					$$invalidate(3, axisLabelOffset = 60);
-    					$$invalidate(4, yScale = band().domain(data.map(d => d.Country)).range([0, innerHeight]).paddingInner(0.1));
-    					$$invalidate(7, maxPop = max(data, d => d.population));
-    					$$invalidate(5, xScale = linear$1().domain([0, maxPop]).range([0, innerWidth]));
+    					updateGraph();
     				}
     			}
     		}
     	};
 
-    	return [data, innerHeight, innerWidth, axisLabelOffset, yScale, xScale, margin];
+    	return [
+    		data,
+    		innerHeight,
+    		innerWidth,
+    		axisLabelOffset,
+    		yScale,
+    		xScale,
+    		year,
+    		width,
+    		height,
+    		margin
+    	];
     }
 
-    class App extends SvelteComponentDev {
+    class App extends SvelteComponent {
     	constructor(options) {
-    		super(options);
+    		super();
     		init(this, options, instance, create_fragment, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "App",
-    			options,
-    			id: create_fragment.name
-    		});
     	}
     }
 
