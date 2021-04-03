@@ -68,6 +68,16 @@
         <svg width={width} height={height}>
             <g transform={`translate(${margin.left}, ${margin.right})`}>
 
+                {#each xScale.ticks() as tickValue}
+                    <g class={'tick'} transform={`translate(${xScale(tickValue)}, ${0})`}>
+                        <line y2={innerHeight} stroke={'black'}/>
+                        <text style={{'textAnchor': 'middle'}} y={innerHeight + 5} dy=".71em">
+                            {d3.format(".2s")(tickValue).replace('G', 'B')}
+                        </text>
+                    </g>
+                {/each}
+
+
                 {#each yScale.domain() as tickValue}
                     <g class={'tick'} transform={`translate(${0}, ${yScale(tickValue) + yScale.bandwidth()/2})`}>
                         <text style="text-anchor: end" x={-3} dy={'.32em'}> {tickValue} </text>
@@ -80,17 +90,17 @@
 
                 {#each data as d(d.Country)}
                     <!--{#key xScale(d.population)}-->
-                        <rect
-                                class="mark"
-                                y={yScale(d.Country)}
-                                width={xScale(d.population)}
-                                height={yScale.bandwidth()}>
-                            <title>
-                                {
-                                    d3.format(".2s")((d.population)).replace('G', 'B')
-                                }
-                            </title>
-                        </rect>
+                    <rect
+                            class="mark"
+                            y={yScale(d.Country)}
+                            width={xScale(d.population)}
+                            height={yScale.bandwidth()}>
+                        <title>
+                            {
+                                d3.format(".2s")((d.population)).replace('G', 'B')
+                            }
+                        </title>
+                    </rect>
                     <!--{/key}-->
                 {/each}
             </g>

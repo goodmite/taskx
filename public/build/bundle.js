@@ -4080,11 +4080,18 @@ var app = (function () {
     	return child_ctx;
     }
 
+    function get_each_context_2(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[17] = list[i];
+    	return child_ctx;
+    }
+
     // (66:0) {#if data}
     function create_if_block(ctx) {
     	let div;
     	let svg;
     	let g;
+    	let each0_anchor;
     	let text_1;
     	let t0;
     	let t1;
@@ -4093,8 +4100,15 @@ var app = (function () {
     	let text_1_y_value;
     	let text_1_textanchor_value;
     	let each_blocks = [];
-    	let each1_lookup = new Map();
+    	let each2_lookup = new Map();
     	let g_transform_value;
+    	let each_value_2 = /*xScale*/ ctx[5].ticks();
+    	let each_blocks_2 = [];
+
+    	for (let i = 0; i < each_value_2.length; i += 1) {
+    		each_blocks_2[i] = create_each_block_2(get_each_context_2(ctx, each_value_2, i));
+    	}
+
     	let each_value_1 = /*yScale*/ ctx[4].domain();
     	let each_blocks_1 = [];
 
@@ -4108,7 +4122,7 @@ var app = (function () {
     	for (let i = 0; i < each_value.length; i += 1) {
     		let child_ctx = get_each_context(ctx, each_value, i);
     		let key = get_key(child_ctx);
-    		each1_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
+    		each2_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
     	}
 
     	return {
@@ -4116,6 +4130,12 @@ var app = (function () {
     			div = element("div");
     			svg = svg_element("svg");
     			g = svg_element("g");
+
+    			for (let i = 0; i < each_blocks_2.length; i += 1) {
+    				each_blocks_2[i].c();
+    			}
+
+    			each0_anchor = empty();
 
     			for (let i = 0; i < each_blocks_1.length; i += 1) {
     				each_blocks_1[i].c();
@@ -4144,6 +4164,12 @@ var app = (function () {
     			append(div, svg);
     			append(svg, g);
 
+    			for (let i = 0; i < each_blocks_2.length; i += 1) {
+    				each_blocks_2[i].m(g, null);
+    			}
+
+    			append(g, each0_anchor);
+
     			for (let i = 0; i < each_blocks_1.length; i += 1) {
     				each_blocks_1[i].m(g, null);
     			}
@@ -4158,6 +4184,29 @@ var app = (function () {
     			}
     		},
     		p(ctx, dirty) {
+    			if (dirty & /*xScale, innerHeight, d3*/ 34) {
+    				each_value_2 = /*xScale*/ ctx[5].ticks();
+    				let i;
+
+    				for (i = 0; i < each_value_2.length; i += 1) {
+    					const child_ctx = get_each_context_2(ctx, each_value_2, i);
+
+    					if (each_blocks_2[i]) {
+    						each_blocks_2[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks_2[i] = create_each_block_2(child_ctx);
+    						each_blocks_2[i].c();
+    						each_blocks_2[i].m(g, each0_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks_2.length; i += 1) {
+    					each_blocks_2[i].d(1);
+    				}
+
+    				each_blocks_2.length = each_value_2.length;
+    			}
+
     			if (dirty & /*yScale*/ 16) {
     				each_value_1 = /*yScale*/ ctx[4].domain();
     				let i;
@@ -4193,11 +4242,12 @@ var app = (function () {
 
     			if (dirty & /*yScale, data, xScale, d3*/ 49) {
     				each_value = /*data*/ ctx[0];
-    				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each1_lookup, g, destroy_block, create_each_block, null, get_each_context);
+    				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each2_lookup, g, destroy_block, create_each_block, null, get_each_context);
     			}
     		},
     		d(detaching) {
     			if (detaching) detach(div);
+    			destroy_each(each_blocks_2, detaching);
     			destroy_each(each_blocks_1, detaching);
 
     			for (let i = 0; i < each_blocks.length; i += 1) {
@@ -4207,7 +4257,61 @@ var app = (function () {
     	};
     }
 
-    // (71:16) {#each yScale.domain() as tickValue}
+    // (71:16) {#each xScale.ticks() as tickValue}
+    function create_each_block_2(ctx) {
+    	let g;
+    	let line;
+    	let line_stroke_value;
+    	let text_1;
+    	let t_value = format(".2s")(/*tickValue*/ ctx[17]).replace("G", "B") + "";
+    	let t;
+    	let text_1_style_value;
+    	let text_1_y_value;
+    	let g_class_value;
+    	let g_transform_value;
+
+    	return {
+    		c() {
+    			g = svg_element("g");
+    			line = svg_element("line");
+    			text_1 = svg_element("text");
+    			t = text(t_value);
+    			attr(line, "y2", /*innerHeight*/ ctx[1]);
+    			attr(line, "stroke", line_stroke_value = "black");
+    			attr(text_1, "style", text_1_style_value = { "textAnchor": "middle" });
+    			attr(text_1, "y", text_1_y_value = /*innerHeight*/ ctx[1] + 5);
+    			attr(text_1, "dy", ".71em");
+    			attr(g, "class", g_class_value = "tick");
+    			attr(g, "transform", g_transform_value = `translate(${/*xScale*/ ctx[5](/*tickValue*/ ctx[17])}, ${0})`);
+    		},
+    		m(target, anchor) {
+    			insert(target, g, anchor);
+    			append(g, line);
+    			append(g, text_1);
+    			append(text_1, t);
+    		},
+    		p(ctx, dirty) {
+    			if (dirty & /*innerHeight*/ 2) {
+    				attr(line, "y2", /*innerHeight*/ ctx[1]);
+    			}
+
+    			if (dirty & /*xScale*/ 32 && t_value !== (t_value = format(".2s")(/*tickValue*/ ctx[17]).replace("G", "B") + "")) set_data(t, t_value);
+
+    			if (dirty & /*innerHeight*/ 2 && text_1_y_value !== (text_1_y_value = /*innerHeight*/ ctx[1] + 5)) {
+    				attr(text_1, "y", text_1_y_value);
+    			}
+
+    			if (dirty & /*xScale*/ 32 && g_transform_value !== (g_transform_value = `translate(${/*xScale*/ ctx[5](/*tickValue*/ ctx[17])}, ${0})`)) {
+    				attr(g, "transform", g_transform_value);
+    			}
+    		},
+    		d(detaching) {
+    			if (detaching) detach(g);
+    		}
+    	};
+    }
+
+    // (81:16) {#each yScale.domain() as tickValue}
     function create_each_block_1(ctx) {
     	let g;
     	let text_1;
@@ -4247,7 +4351,7 @@ var app = (function () {
     	};
     }
 
-    // (81:16) {#each data as d(d.Country)}
+    // (91:16) {#each data as d(d.Country)}
     function create_each_block(key_1, ctx) {
     	let rect;
     	let title;
