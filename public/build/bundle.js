@@ -4118,7 +4118,6 @@ var app = (function () {
     	let text_1;
     	let t_value = format(".2s")(/*tickValue*/ ctx[2]).replace("G", "B") + "";
     	let t;
-    	let text_1_style_value;
     	let text_1_y_value;
     	let g_class_value;
     	let g_transform_value;
@@ -4131,9 +4130,9 @@ var app = (function () {
     			t = text(t_value);
     			attr(line, "y2", /*innerHeight*/ ctx[1]);
     			attr(line, "stroke", line_stroke_value = "black");
-    			attr(text_1, "style", text_1_style_value = { "textAnchor": "middle" });
     			attr(text_1, "y", text_1_y_value = /*innerHeight*/ ctx[1] + 5);
     			attr(text_1, "dy", ".71em");
+    			attr(text_1, "text-anchor", "middle");
     			attr(g, "class", g_class_value = "tick");
     			attr(g, "transform", g_transform_value = `translate(${/*xScale*/ ctx[0](/*tickValue*/ ctx[2])}, ${0})`);
     		},
@@ -4517,7 +4516,6 @@ var app = (function () {
     	let t2;
     	let text_1_x_value;
     	let text_1_y_value;
-    	let text_1_textanchor_value;
     	let marks;
     	let g_transform_value;
     	let current;
@@ -4554,7 +4552,7 @@ var app = (function () {
     			attr(text_1, "class", "axis-label");
     			attr(text_1, "x", text_1_x_value = /*innerWidth*/ ctx[2] / 2);
     			attr(text_1, "y", text_1_y_value = /*innerHeight*/ ctx[1] + /*axisLabelOffset*/ ctx[3]);
-    			attr(text_1, "textanchor", text_1_textanchor_value = "middle");
+    			attr(text_1, "text-anchor", "middle");
     			attr(g, "transform", g_transform_value = `translate(${/*margin*/ ctx[9].left}, ${/*margin*/ ctx[9].right})`);
     			attr(svg, "width", /*width*/ ctx[7]);
     			attr(svg, "height", /*height*/ ctx[8]);

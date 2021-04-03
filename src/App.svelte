@@ -79,7 +79,7 @@
 
                 <AxisLeft yScale={yScale} />
 
-                <text class="axis-label" x={innerWidth/2} y={innerHeight + axisLabelOffset} textAnchor={'middle'}>
+                <text class="axis-label" x={innerWidth/2} y={innerHeight + axisLabelOffset} text-anchor="middle">
                     Population ({year})
                 </text>
                 <Marks
