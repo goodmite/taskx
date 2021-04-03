@@ -1,68 +1,97 @@
 <script>
-  import { csv } from 'd3-fetch';
+    import * as d3 from "d3";
 
-  import CookieBanner from './CookieBanner.svelte';
-  import Flower from './flower/Flower.svelte';
+    const url =
+        'https://gist.githubusercontent.com/curran/0ac4077c7fc6390f5dd33bf5c06cb5ff/raw/605c54080c7a93a417a3cea93fd52e7550e76500/UN_Population_2019.csv';
 
-  const years = [1998, 2008, 2018];
+    const height = 500;
+    const width = 800;
+    const margin = {
+        top: 20,
+        bottom: 60,
+        left: 220,
+        right: 10,
+    }
+    let data = [];
 
-  let data;
+    const row = d => {
+        /*create another row named 2020, which contains int, not string*/
+        d.population = (+d['2020']) * 1000;
+        return d;
+    }
+    d3.csv(url, row)
+        .then(dataArg => {
+            data = dataArg.slice(0, 10);
+        })
+    let innerHeight;
+    let innerWidth;
+    let axisLabelOffset;
+    let yScale;
+    let maxPop;
+    let xScale;
 
-  async function load() {
-    data = await csv('child_mortality.csv', d => { // /childhood-mortality
-      const dataArr = [];
-      const returnObj = {
-        iso: d.iso,
-        country: d.country,
-        reduction: +d.reduction,
-        continent: d.continent
-      };
-      for (let key in d) {
-        if (key.match('^19|^20')) dataArr.push({year: +key, value: +d[key]});
-      }
-      returnObj['dataArr'] = dataArr;
-      return returnObj;
-    });
-  }
+    $:{
+        if (data) {
+            innerHeight = height - margin.top - margin.bottom;
+            innerWidth = width - margin.left - margin.right;
+            axisLabelOffset = 60;
+            yScale = d3.scaleBand()
+                .domain(data.map(d => d.Country))
+                .range([0, innerHeight])
+                .paddingInner(0.1);
+            maxPop = d3.max(data, d => d.population);
+            xScale = d3.scaleLinear()
+                .domain([0, maxPop])
+                .range([0, innerWidth])
 
-  load();
+        }
+    }
+
 </script>
 
-<div class="wrapper">
-  <CookieBanner />
-  <div class="header">
-    <h1>The circle of hope</h1>
+{#if data}
+  <div class="wrapper">
+    <svg width={width} height={height}>
+      <g transform={`translate(${margin.left}, ${margin.right})`}>
+
+        {#each xScale.ticks() as tickValue}
+          <g class={'tick'} transform={`translate(${xScale(tickValue)}, ${0})`}>
+            <line y2={innerHeight} stroke={'black'}/>
+            <text style={{'textAnchor': 'middle'}} y={innerHeight + 5} dy=".71em">
+              {d3.format(".2s")(tickValue).replace('G', 'B')}
+            </text>
+          </g>
+        {/each}
+
+        {#each yScale.domain() as tickValue}
+          <g class={'tick'} transform={`translate(${0}, ${yScale(tickValue) + yScale.bandwidth()/2})`}>
+            <text style="text-anchor: end" x={-3} dy={'.32em'}> {tickValue} </text>
+          </g>
+        {/each}
+
+        <text class="axis-label" x={innerWidth/2} y={innerHeight + axisLabelOffset} textAnchor={'middle'}>
+          Population
+        </text>
+
+        {#each data as d(d.Country)}
+          <rect
+                  class={'mark'}
+                  y={yScale(d.Country)}
+                  width={xScale(d.population)}
+                  height={yScale.bandwidth()}
+          >
+            <title>
+              {
+                      d3.format(".2s")((d.population)).replace('G', 'B')
+              }
+            </title>
+          </rect>
+        {/each}
+      </g>
+    </svg>
+
   </div>
-  <div id="visual">
-    {#if data}
-      <Flower {data} {years} />
-    {/if}
-  </div>
-</div>
+{/if}
 
 <style>
-  .wrapper {
-    width: 95%;
-    height: 100%;
-    margin: 0 auto;
-  }
-
-  .header {
-    width: 100%;
-    margin: 1.5rem 0;
-    color: var(--blue);
-  }
-
-  .header h1 {
-    font-family: 'Ibarra Real Nova', serif;
-    font-weight: normal;
-    font-size: calc(3rem + 7px);
-    /* text-align: center; */
-  }
-
-  #visual {
-    position: relative;
-    width: 100%;
-    height: 100vmin;
-  }
 </style>
