@@ -1,6 +1,10 @@
 <script>
     import * as d3 from "d3";
-
+    import AxisBottom from "./population/AxisBottom.svelte";
+    import AxisLeft from "./population/AxisLeft.svelte";
+    import Marks from "./population/Marks.svelte";
+    //reference: https://www.youtube.com/watch?v=2LhoCfjm8R4&t=21206s
+    //code in react: https://vizhub.com/curran/32dfc8d2393844c6a5b9d199d9a35946?edit=files&file=index.js
     const url =
         'https://gist.githubusercontent.com/curran/0ac4077c7fc6390f5dd33bf5c06cb5ff/raw/605c54080c7a93a417a3cea93fd52e7550e76500/UN_Population_2019.csv';
 
@@ -68,41 +72,22 @@
         <svg width={width} height={height}>
             <g transform={`translate(${margin.left}, ${margin.right})`}>
 
-                {#each xScale.ticks() as tickValue}
-                    <g class={'tick'} transform={`translate(${xScale(tickValue)}, ${0})`}>
-                        <line y2={innerHeight} stroke={'black'}/>
-                        <text style={{'textAnchor': 'middle'}} y={innerHeight + 5} dy=".71em">
-                            {d3.format(".2s")(tickValue).replace('G', 'B')}
-                        </text>
-                    </g>
-                {/each}
+                <AxisBottom
+                        xScale={xScale}
+                        innerHeight={innerHeight}
+                />
 
-
-                {#each yScale.domain() as tickValue}
-                    <g class={'tick'} transform={`translate(${0}, ${yScale(tickValue) + yScale.bandwidth()/2})`}>
-                        <text style="text-anchor: end" x={-3} dy={'.32em'}> {tickValue} </text>
-                    </g>
-                {/each}
+                <AxisLeft yScale={yScale} />
 
                 <text class="axis-label" x={innerWidth/2} y={innerHeight + axisLabelOffset} textAnchor={'middle'}>
                     Population ({year})
                 </text>
+                <Marks
+                        data={data}
+                        xScale={xScale}
+                        yScale={yScale}
+                />
 
-                {#each data as d(d.Country)}
-                    <!--{#key xScale(d.population)}-->
-                    <rect
-                            class="mark"
-                            y={yScale(d.Country)}
-                            width={xScale(d.population)}
-                            height={yScale.bandwidth()}>
-                        <title>
-                            {
-                                d3.format(".2s")((d.population)).replace('G', 'B')
-                            }
-                        </title>
-                    </rect>
-                    <!--{/key}-->
-                {/each}
             </g>
         </svg>
 
