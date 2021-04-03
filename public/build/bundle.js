@@ -47,9 +47,6 @@ var app = (function () {
     function text(data) {
         return document.createTextNode(data);
     }
-    function space() {
-        return text(' ');
-    }
     function empty() {
         return text('');
     }
@@ -175,86 +172,6 @@ var app = (function () {
             });
             block.o(local);
         }
-    }
-
-    function destroy_block(block, lookup) {
-        block.d(1);
-        lookup.delete(block.key);
-    }
-    function update_keyed_each(old_blocks, dirty, get_key, dynamic, ctx, list, lookup, node, destroy, create_each_block, next, get_context) {
-        let o = old_blocks.length;
-        let n = list.length;
-        let i = o;
-        const old_indexes = {};
-        while (i--)
-            old_indexes[old_blocks[i].key] = i;
-        const new_blocks = [];
-        const new_lookup = new Map();
-        const deltas = new Map();
-        i = n;
-        while (i--) {
-            const child_ctx = get_context(ctx, list, i);
-            const key = get_key(child_ctx);
-            let block = lookup.get(key);
-            if (!block) {
-                block = create_each_block(key, child_ctx);
-                block.c();
-            }
-            else if (dynamic) {
-                block.p(child_ctx, dirty);
-            }
-            new_lookup.set(key, new_blocks[i] = block);
-            if (key in old_indexes)
-                deltas.set(key, Math.abs(i - old_indexes[key]));
-        }
-        const will_move = new Set();
-        const did_move = new Set();
-        function insert(block) {
-            transition_in(block, 1);
-            block.m(node, next);
-            lookup.set(block.key, block);
-            next = block.first;
-            n--;
-        }
-        while (o && n) {
-            const new_block = new_blocks[n - 1];
-            const old_block = old_blocks[o - 1];
-            const new_key = new_block.key;
-            const old_key = old_block.key;
-            if (new_block === old_block) {
-                // do nothing
-                next = new_block.first;
-                o--;
-                n--;
-            }
-            else if (!new_lookup.has(old_key)) {
-                // remove old block
-                destroy(old_block, lookup);
-                o--;
-            }
-            else if (!lookup.has(new_key) || will_move.has(new_key)) {
-                insert(new_block);
-            }
-            else if (did_move.has(old_key)) {
-                o--;
-            }
-            else if (deltas.get(new_key) > deltas.get(old_key)) {
-                did_move.add(new_key);
-                insert(new_block);
-            }
-            else {
-                will_move.add(old_key);
-                o--;
-            }
-        }
-        while (o--) {
-            const old_block = old_blocks[o];
-            if (!new_lookup.has(old_block.key))
-                destroy(old_block, lookup);
-        }
-        while (n)
-            insert(new_blocks[n - 1]);
-        return new_blocks;
     }
     function create_component(block) {
         block && block.c();
@@ -4254,7 +4171,6 @@ var app = (function () {
     	let t;
     	let text_1_x_value;
     	let text_1_dy_value;
-    	let g_class_value;
     	let g_transform_value;
 
     	return {
@@ -4265,7 +4181,7 @@ var app = (function () {
     			set_style(text_1, "text-anchor", "end");
     			attr(text_1, "x", text_1_x_value = -3);
     			attr(text_1, "dy", text_1_dy_value = ".32em");
-    			attr(g, "class", g_class_value = "tick");
+    			attr(g, "class", "tick");
     			attr(g, "transform", g_transform_value = `translate(${0}, ${/*yScale*/ ctx[0](/*tickValue*/ ctx[5]) + /*yScale*/ ctx[0].bandwidth() / 2})`);
     		},
     		m(target, anchor) {
@@ -4379,50 +4295,43 @@ var app = (function () {
 
     function get_each_context$2(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[3] = list[i];
+    	child_ctx[6] = list[i];
     	return child_ctx;
     }
 
-    // (7:0) {#each data as d(d.Country)}
-    function create_each_block$2(key_1, ctx) {
+    // (5:0) {#each data as d}
+    function create_each_block$2(ctx) {
     	let rect;
     	let title;
-    	let t0_value = format(".2s")(/*d*/ ctx[3].population).replace("G", "B") + "";
-    	let t0;
+    	let t_value = /*formatterFn*/ ctx[5](/*d*/ ctx[6][/*X_COLUMN*/ ctx[3]]) + "";
+    	let t;
     	let rect_y_value;
     	let rect_width_value;
     	let rect_height_value;
-    	let t1;
 
     	return {
-    		key: key_1,
-    		first: null,
     		c() {
     			rect = svg_element("rect");
     			title = svg_element("title");
-    			t0 = text(t0_value);
-    			t1 = space();
+    			t = text(t_value);
     			attr(rect, "class", "mark");
-    			attr(rect, "y", rect_y_value = /*yScale*/ ctx[1](/*d*/ ctx[3].Country));
-    			attr(rect, "width", rect_width_value = /*xScale*/ ctx[2](/*d*/ ctx[3].population));
+    			attr(rect, "y", rect_y_value = /*yScale*/ ctx[1](/*d*/ ctx[6][/*Y_COLUMN*/ ctx[4]]));
+    			attr(rect, "width", rect_width_value = /*xScale*/ ctx[2](/*d*/ ctx[6][/*X_COLUMN*/ ctx[3]]));
     			attr(rect, "height", rect_height_value = /*yScale*/ ctx[1].bandwidth());
-    			this.first = rect;
     		},
     		m(target, anchor) {
     			insert(target, rect, anchor);
     			append(rect, title);
-    			append(title, t0);
-    			insert(target, t1, anchor);
+    			append(title, t);
     		},
-    		p(new_ctx, dirty) {
-    			ctx = new_ctx;
-    			if (dirty & /*data*/ 1 && t0_value !== (t0_value = format(".2s")(/*d*/ ctx[3].population).replace("G", "B") + "")) set_data(t0, t0_value);
+    		p(ctx, dirty) {
+    			if (dirty & /*formatterFn, data, X_COLUMN*/ 41 && t_value !== (t_value = /*formatterFn*/ ctx[5](/*d*/ ctx[6][/*X_COLUMN*/ ctx[3]]) + "")) set_data(t, t_value);
 
-    			if (dirty & /*yScale, data*/ 3 && rect_y_value !== (rect_y_value = /*yScale*/ ctx[1](/*d*/ ctx[3].Country))) {
+    			if (dirty & /*yScale, data, Y_COLUMN*/ 19 && rect_y_value !== (rect_y_value = /*yScale*/ ctx[1](/*d*/ ctx[6][/*Y_COLUMN*/ ctx[4]]))) {
     				attr(rect, "y", rect_y_value);
     			}
 
-    			if (dirty & /*xScale, data*/ 5 && rect_width_value !== (rect_width_value = /*xScale*/ ctx[2](/*d*/ ctx[3].population))) {
+    			if (dirty & /*xScale, data, X_COLUMN*/ 13 && rect_width_value !== (rect_width_value = /*xScale*/ ctx[2](/*d*/ ctx[6][/*X_COLUMN*/ ctx[3]]))) {
     				attr(rect, "width", rect_width_value);
     			}
 
@@ -4432,22 +4341,17 @@ var app = (function () {
     		},
     		d(detaching) {
     			if (detaching) detach(rect);
-    			if (detaching) detach(t1);
     		}
     	};
     }
 
     function create_fragment$2(ctx) {
-    	let each_blocks = [];
-    	let each_1_lookup = new Map();
     	let each_1_anchor;
     	let each_value = /*data*/ ctx[0];
-    	const get_key = ctx => /*d*/ ctx[3].Country;
+    	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
-    		let child_ctx = get_each_context$2(ctx, each_value, i);
-    		let key = get_key(child_ctx);
-    		each_1_lookup.set(key, each_blocks[i] = create_each_block$2(key, child_ctx));
+    		each_blocks[i] = create_each_block$2(get_each_context$2(ctx, each_value, i));
     	}
 
     	return {
@@ -4466,39 +4370,70 @@ var app = (function () {
     			insert(target, each_1_anchor, anchor);
     		},
     		p(ctx, [dirty]) {
-    			if (dirty & /*yScale, data, xScale, d3*/ 7) {
+    			if (dirty & /*yScale, data, Y_COLUMN, xScale, X_COLUMN, formatterFn*/ 63) {
     				each_value = /*data*/ ctx[0];
-    				each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each_1_lookup, each_1_anchor.parentNode, destroy_block, create_each_block$2, each_1_anchor, get_each_context$2);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$2(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$2(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
     			}
     		},
     		i: noop,
     		o: noop,
     		d(detaching) {
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].d(detaching);
-    			}
-
+    			destroy_each(each_blocks, detaching);
     			if (detaching) detach(each_1_anchor);
     		}
     	};
     }
 
     function instance$2($$self, $$props, $$invalidate) {
-    	let { data } = $$props, { yScale } = $$props, { xScale } = $$props;
+    	let { data } = $$props,
+    		{ yScale } = $$props,
+    		{ xScale } = $$props,
+    		{ X_COLUMN } = $$props,
+    		{ Y_COLUMN } = $$props,
+    		{ formatterFn } = $$props;
 
     	$$self.$$set = $$props => {
     		if ("data" in $$props) $$invalidate(0, data = $$props.data);
     		if ("yScale" in $$props) $$invalidate(1, yScale = $$props.yScale);
     		if ("xScale" in $$props) $$invalidate(2, xScale = $$props.xScale);
+    		if ("X_COLUMN" in $$props) $$invalidate(3, X_COLUMN = $$props.X_COLUMN);
+    		if ("Y_COLUMN" in $$props) $$invalidate(4, Y_COLUMN = $$props.Y_COLUMN);
+    		if ("formatterFn" in $$props) $$invalidate(5, formatterFn = $$props.formatterFn);
     	};
 
-    	return [data, yScale, xScale];
+    	return [data, yScale, xScale, X_COLUMN, Y_COLUMN, formatterFn];
     }
 
     class Marks extends SvelteComponent {
     	constructor(options) {
     		super();
-    		init(this, options, instance$2, create_fragment$2, safe_not_equal, { data: 0, yScale: 1, xScale: 2 });
+
+    		init(this, options, instance$2, create_fragment$2, safe_not_equal, {
+    			data: 0,
+    			yScale: 1,
+    			xScale: 2,
+    			X_COLUMN: 3,
+    			Y_COLUMN: 4,
+    			formatterFn: 5
+    		});
     	}
     }
 
@@ -4522,18 +4457,21 @@ var app = (function () {
 
     	axisbottom = new AxisBottom({
     			props: {
-    				xScale: /*xScale*/ ctx[5],
+    				xScale: /*xScale*/ ctx[4],
     				innerHeight: /*innerHeight*/ ctx[1]
     			}
     		});
 
-    	axisleft = new AxisLeft({ props: { yScale: /*yScale*/ ctx[4] } });
+    	axisleft = new AxisLeft({ props: { yScale: /*yScale*/ ctx[3] } });
 
     	marks = new Marks({
     			props: {
     				data: /*data*/ ctx[0],
-    				xScale: /*xScale*/ ctx[5],
-    				yScale: /*yScale*/ ctx[4]
+    				xScale: /*xScale*/ ctx[4],
+    				yScale: /*yScale*/ ctx[3],
+    				X_COLUMN,
+    				Y_COLUMN,
+    				formatterFn: /*formatterFn*/ ctx[10]
     			}
     		});
 
@@ -4546,16 +4484,16 @@ var app = (function () {
     			create_component(axisleft.$$.fragment);
     			text_1 = svg_element("text");
     			t0 = text("Population (");
-    			t1 = text(/*year*/ ctx[6]);
+    			t1 = text(/*year*/ ctx[5]);
     			t2 = text(")\r\n                ");
     			create_component(marks.$$.fragment);
     			attr(text_1, "class", "axis-label");
     			attr(text_1, "x", text_1_x_value = /*innerWidth*/ ctx[2] / 2);
-    			attr(text_1, "y", text_1_y_value = /*innerHeight*/ ctx[1] + /*axisLabelOffset*/ ctx[3]);
+    			attr(text_1, "y", text_1_y_value = /*innerHeight*/ ctx[1] + /*axisLabelOffset*/ ctx[8]);
     			attr(text_1, "text-anchor", "middle");
-    			attr(g, "transform", g_transform_value = `translate(${/*margin*/ ctx[9].left}, ${/*margin*/ ctx[9].right})`);
+    			attr(g, "transform", g_transform_value = `translate(${/*margin*/ ctx[6].left}, ${/*margin*/ ctx[6].right})`);
     			attr(svg, "width", /*width*/ ctx[7]);
-    			attr(svg, "height", /*height*/ ctx[8]);
+    			attr(svg, "height", /*height*/ ctx[9]);
     			attr(div, "class", "wrapper");
     		},
     		m(target, anchor) {
@@ -4573,26 +4511,26 @@ var app = (function () {
     		},
     		p(ctx, dirty) {
     			const axisbottom_changes = {};
-    			if (dirty & /*xScale*/ 32) axisbottom_changes.xScale = /*xScale*/ ctx[5];
+    			if (dirty & /*xScale*/ 16) axisbottom_changes.xScale = /*xScale*/ ctx[4];
     			if (dirty & /*innerHeight*/ 2) axisbottom_changes.innerHeight = /*innerHeight*/ ctx[1];
     			axisbottom.$set(axisbottom_changes);
     			const axisleft_changes = {};
-    			if (dirty & /*yScale*/ 16) axisleft_changes.yScale = /*yScale*/ ctx[4];
+    			if (dirty & /*yScale*/ 8) axisleft_changes.yScale = /*yScale*/ ctx[3];
     			axisleft.$set(axisleft_changes);
-    			if (!current || dirty & /*year*/ 64) set_data(t1, /*year*/ ctx[6]);
+    			if (!current || dirty & /*year*/ 32) set_data(t1, /*year*/ ctx[5]);
 
     			if (!current || dirty & /*innerWidth*/ 4 && text_1_x_value !== (text_1_x_value = /*innerWidth*/ ctx[2] / 2)) {
     				attr(text_1, "x", text_1_x_value);
     			}
 
-    			if (!current || dirty & /*innerHeight, axisLabelOffset*/ 10 && text_1_y_value !== (text_1_y_value = /*innerHeight*/ ctx[1] + /*axisLabelOffset*/ ctx[3])) {
+    			if (!current || dirty & /*innerHeight*/ 2 && text_1_y_value !== (text_1_y_value = /*innerHeight*/ ctx[1] + /*axisLabelOffset*/ ctx[8])) {
     				attr(text_1, "y", text_1_y_value);
     			}
 
     			const marks_changes = {};
     			if (dirty & /*data*/ 1) marks_changes.data = /*data*/ ctx[0];
-    			if (dirty & /*xScale*/ 32) marks_changes.xScale = /*xScale*/ ctx[5];
-    			if (dirty & /*yScale*/ 16) marks_changes.yScale = /*yScale*/ ctx[4];
+    			if (dirty & /*xScale*/ 16) marks_changes.xScale = /*xScale*/ ctx[4];
+    			if (dirty & /*yScale*/ 8) marks_changes.yScale = /*yScale*/ ctx[3];
     			marks.$set(marks_changes);
     		},
     		i(local) {
@@ -4673,19 +4611,9 @@ var app = (function () {
     }
 
     const url = "https://gist.githubusercontent.com/curran/0ac4077c7fc6390f5dd33bf5c06cb5ff/raw/605c54080c7a93a417a3cea93fd52e7550e76500/UN_Population_2019.csv";
+    const Y_COLUMN = "Country", X_COLUMN = "population";
 
     function instance$3($$self, $$props, $$invalidate) {
-    	let width = 800,
-    		innerHeight,
-    		innerWidth,
-    		axisLabelOffset,
-    		yScale,
-    		maxPop,
-    		xScale,
-    		height = 500,
-    		data = [],
-    		year = 1950;
-
     	const margin = {
     		top: 20,
     		bottom: 60,
@@ -4693,19 +4621,33 @@ var app = (function () {
     		right: 10
     	};
 
-    	const addPopulation = (data, year) => {
-    		return data.map(d => ({ ...d, population: +d[year] * 1000 })).slice(0, 10);
+    	let width = 800,
+    		innerHeight,
+    		innerWidth,
+    		axisLabelOffset = 60,
+    		yScale,
+    		maxPop,
+    		xScale,
+    		height = 500,
+    		data = [],
+    		year = 1950;
+
+    	innerHeight = height - margin.top - margin.bottom;
+    	innerWidth = width - margin.left - margin.right;
+
+    	const addColumn = (data, year) => {
+    		return data.map(d => ({ ...d, [X_COLUMN]: +d[year] * 1000 })).slice(0, 10);
     	};
 
     	csv$1(url).then(dataArg => {
     		const interval = setInterval(
     			() => {
-    				$$invalidate(0, data = addPopulation(dataArg, year));
+    				$$invalidate(0, data = addColumn(dataArg, year));
 
     				if (year === 2020) {
-    					$$invalidate(6, year = 1950);
+    					$$invalidate(5, year = 1950);
     				} else {
-    					$$invalidate(6, year++, year);
+    					$$invalidate(5, year++, year);
     				}
     			},
     			100
@@ -4713,13 +4655,12 @@ var app = (function () {
     	});
 
     	const updateGraph = () => {
-    		$$invalidate(1, innerHeight = height - margin.top - margin.bottom);
-    		$$invalidate(2, innerWidth = width - margin.left - margin.right);
-    		$$invalidate(3, axisLabelOffset = 60);
-    		$$invalidate(4, yScale = band().domain(data.map(d => d.Country)).range([0, innerHeight]).paddingInner(0.1));
-    		maxPop = max(data, d => d.population);
-    		$$invalidate(5, xScale = linear$1().domain([0, maxPop]).range([0, innerWidth]));
+    		$$invalidate(3, yScale = band().domain(data.map(d => d[Y_COLUMN])).range([0, innerHeight]).paddingInner(0.1));
+    		maxPop = max(data, d => d[X_COLUMN]);
+    		$$invalidate(4, xScale = linear$1().domain([0, maxPop]).range([0, innerWidth]));
     	};
+
+    	const formatterFn = _ => format(".2s")(_).replace("G", "B");
 
     	$$self.$$.update = () => {
     		if ($$self.$$.dirty & /*data*/ 1) {
@@ -4735,13 +4676,14 @@ var app = (function () {
     		data,
     		innerHeight,
     		innerWidth,
-    		axisLabelOffset,
     		yScale,
     		xScale,
     		year,
+    		margin,
     		width,
+    		axisLabelOffset,
     		height,
-    		margin
+    		formatterFn
     	];
     }
 

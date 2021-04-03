@@ -1,21 +1,18 @@
 <script>
-    import * as d3 from 'd3';
-
-    export let data, yScale, xScale;
+    export let data, yScale, xScale, X_COLUMN, Y_COLUMN, formatterFn;
 </script>
 
-{#each data as d(d.Country)}
-    <!--{#key xScale(d.population)}-->
+{#each data as d}
     <rect
             class="mark"
-            y={yScale(d.Country)}
-            width={xScale(d.population)}
+            y={yScale(d[Y_COLUMN])}
+            width={xScale(d[X_COLUMN])}
             height={yScale.bandwidth()}>
-        <title>
-            {
-                d3.format(".2s")((d.population)).replace('G', 'B')
-            }
-        </title>
+        <title>{formatterFn(d[X_COLUMN])}</title>
     </rect>
-    <!--{/key}-->
 {/each}
+
+
+<style>
+    
+</style>

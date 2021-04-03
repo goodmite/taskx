@@ -3,7 +3,9 @@
 </script>
 
 {#each yScale.domain() as tickValue}
-    <g class={'tick'} transform={`translate(${0}, ${yScale(tickValue) + yScale.bandwidth()/2})`}>
+    <g class="tick" transform={`translate(${0}, ${yScale(tickValue) + yScale.bandwidth()/2})`}>
         <text style="text-anchor: end" x={-3} dy={'.32em'}> {tickValue} </text>
     </g>
 {/each}
+
+<style></style>
